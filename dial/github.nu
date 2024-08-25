@@ -100,6 +100,29 @@ export def "search build-query" []: [record -> string] {
     | str join " "
 }
 
+
+# Search issues and pull requests
+#
+# See: https://docs.github.com/en/rest/search/search?apiVersion=2022-11-28#search-issues-and-pull-requests
+#
+# Limitation: Using a record for queries is convenient but prevents from using multiple values for a given key. E.g. it's not possible to use `is:pr is:merged`.
+export def "search" [
+    query: record # A record containing the query.
+    --direction: string@pr_direction = desc
+    --per-page: int = 100
+    --page: int = 1
+] {
+    let query = {
+        q: ($search | search build-query)
+        order: $direction
+        per_page: $per_page
+        page: $page
+    }
+
+    fetch -q $query $"search/issues" 
+}
+
+
 # Fetch the Pull Requests merged since the given date.
 export def "pr list merged" [
     owner: string
@@ -111,18 +134,12 @@ export def "pr list merged" [
 ] {
     let since = if ($since | is-empty) { date now } else { $since }
     let since_stamp = ($since | format date "%Y-%m-%d")
-    let search = {
+    let query = {
         repo: $"($owner)/($repo)"
         type: pr
         is: merged
         merged: $">=($since_stamp)"
     }
-    let query = {
-        q: ($search | search build-query)
-        order: $direction
-        per_page: $per_page
-        page: $page
-    }
 
-    fetch -q $query $"search/issues" 
+    search $query --direction $direction --per-page $per_page --page $page
 }
