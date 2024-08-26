@@ -1,39 +1,9 @@
 # Interactions with GitHub
+use ./error.nu *
+use ./token.nu
+use ./http.nu
 
 const BASE_URL = "https://api.github.com"
-
-export def "token decrypt" [] {
-    ^op read $env.GITHUB_TOKEN_OP 
-}
-
-# 1Password is dreadfully slow.
-export def --env "token env" [] {
-    $env.GITHUB_TOKEN = (token decrypt)
-}
-
-export def "token read" [] {
-    if ($env.GITHUB_TOKEN? | is-empty) {
-        token decrypt
-    } else {
-        $env.GITHUB_TOKEN
-    }
-}
-
-# Expects an input from a raw Link http header.
-#
-# This is a rather naive parser for IETF RFC 8288 Web Linking values.
-#
-# ## Example
-#
-# ```nu
-# '<https://api.github.com/search/issues?q=repo%3Anushell%2Fnushell+type%3Apr+is%3Amerged+merged%3A%3E%3D2024-08-01&order=desc&per_page=2&page=2>; rel="next", <https://api.github.com/search/issues?q=repo%3Anushell%2Fnushell+type%3Apr+is%3Amerged+merged%3A%3E%3D2024-08-01&order=desc&per_page=2&page=42>; rel="last"' | from http link-header
-# ```
-export def "from http link-header" [] {
-    $in
-    | split row ","
-    | each { $in | str trim | parse "<{url}>; rel=\"{rel}\"" }
-    | update url { url decode }    
-}
 
 # Requests something from the GitHub API
 #
@@ -41,105 +11,124 @@ export def "from http link-header" [] {
 #
 # x-ratelimit-reset * 1_000_000_000 | into datetime
 # x-ratelimit-remaining
-export def "fetch" [endpoint: string --query (-q): record] {
+export def "fetch" [] {
+    let url = $in
+    let token = try { $env.GITHUB_TOKEN } catch {
+        fail "Expected an environment variable named `GITHUB_TOKEN`"
+    }
     let headers = {
         Accept: "application/vnd.github+json"
         X-GitHub-Api-Version: "2022-11-28"
-        Authorization: $"Bearer (token read)"
-    }
-    let url = if ($query | is-not-empty) {
-        $"($BASE_URL)/($endpoint)?($query | url build-query)"
-    } else {
-        $"($BASE_URL)/($endpoint)"
+        Authorization: $"Bearer (token read $token)"
     }
 
     http get -f --headers $headers $url 
 }
 
+# Composes a GitHub API URL.
+export def "url join" [endpoint: string --query (-q): record] {
+    [
+        $"($BASE_URL)/($endpoint)"
+        ($query | url build-query)
+    ]
+    | compact --empty
+    | str join "?"
+}
+
+
 export def "octocat" [] {
-    fetch "octocat" 
+    url join "octocat"
+    | fetch 
 }
 
-def pr_statuses [] {
-    [open closed all]
-}
-
-def pr_sort [] {
-    [created updated popularity long-running]
-}
-
-def pr_direction [] {
-    [asc desc]
-}
-
-export def "pr list" [
-    owner: string
-    repo: string
-    --state (-s): string@pr_statuses = closed
-    --sort: string@pr_sort = updated
-    --direction: string@pr_direction = desc
-    --per-page: int = 50
-    --page: int = 1
-] {
-    let query = {
-        state: $state
-        sort: $sort
-        direction: $direction
-        per_page: $per_page
-        page: $page
+module completer {
+    export def pr_statuses [] {
+        [open closed all]
     }
 
-    fetch -q $query $"repos/($owner)/($repo)/pulls" 
+    export def pr_sort [] {
+        [created updated popularity long-running]
+    }
+
+    export def pr_direction [] {
+        [asc desc]
+    }
 }
+use completer
+
 
 # Converts record into search query string.
 # Similar to `url build-query` but for search queries in GitHub.
 export def "search build-query" []: [record -> string] {
     $in
-    | items {|key, value| $"($key):($value)" }
+    | items {|key, value|
+          match ($value | describe --detailed | get type) {
+              list => ($value | each { $"($key):($in)" })
+              string => $"($key):($value)"
+              $ty => (fail $"($ty) is not supported in search queries.")
+          }
+      }
+    | flatten
     | str join " "
 }
 
+# Fetches a list page and provides the result and the URL to the next page.
+#
+# To be used with `generate`
+export def "fetch page" [] {
+    let url = $in
 
-# Search issues and pull requests
+    if ($url | is-not-empty) {
+        let res = $url | fetch        
+
+
+        if ($res.status != 200) {
+            fail $"The request to GitHub failed with error ($res.status)"
+        }
+
+        {out: $res.body.items, next: ($res | http next)}
+    }
+}
+
+
+# Search issues and pull requests.
+#
+# The paginated result is flattened into a single streamed table.
 #
 # See: https://docs.github.com/en/rest/search/search?apiVersion=2022-11-28#search-issues-and-pull-requests
-#
-# Limitation: Using a record for queries is convenient but prevents from using multiple values for a given key. E.g. it's not possible to use `is:pr is:merged`.
 export def "search" [
     query: record # A record containing the query.
-    --direction: string@pr_direction = desc
+    --direction: string@"completer pr_direction" = desc
     --per-page: int = 100
     --page: int = 1
 ] {
     let query = {
-        q: ($search | search build-query)
+        q: ($query | search build-query)
         order: $direction
         per_page: $per_page
         page: $page
     }
-
-    fetch -q $query $"search/issues" 
+     
+    generate {fetch page} (url join -q $query $"search/issues")
+    | flatten
 }
 
-
-# Fetch the Pull Requests merged since the given date.
+# Retrieves the list of merged Pull Requests since the given date for the given repositories.
 export def "pr list merged" [
-    owner: string
-    repo: string
     --since (-s): datetime # Date from when PRs were merged. Defaults to today.
-    --direction: string@pr_direction = desc
+    --direction: string@"completer pr_direction" = desc
     --per-page: int = 100
     --page: int = 1
+    ...repos
 ] {
     let since = if ($since | is-empty) { date now } else { $since }
     let since_stamp = ($since | format date "%Y-%m-%d")
     let query = {
-        repo: $"($owner)/($repo)"
+        repo: $repos
         type: pr
         is: merged
         merged: $">=($since_stamp)"
     }
 
-    search $query --direction $direction --per-page $per_page --page $page
+    search --direction $direction --per-page $per_page --page $page $query
 }
