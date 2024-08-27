@@ -98,3 +98,35 @@ export def first [] {
 export def prev [] {
     $in | link prev
 }
+
+
+
+# Collects all available information from a HTTP response.
+#
+# NOTE: GitHub response assumed.
+export def "ratelimit" [] {
+    $in
+    | get headers.response
+    | where name =~ "^x-ratelimit"
+    | update name { $in | parse "x-ratelimit-{name}" | get name.0 }
+    | update value {|row|
+          match $row.name {
+              reset => ($row.value | into int | $in * 1_000_000_000 | into datetime)
+              remaining | limit | used => ($row.value | into int)
+              _ => $row.value
+          }
+      }
+    | reduce -f {} {|row, acc| $acc | upsert $row.name $row.value }
+}
+
+# Checks whether there is allowance for another request.
+#
+# ```nu
+# let rl = $res | http ratelimit
+#
+# if ($rl | http ratelimit check) { $url | github fetch }
+# ```
+export def "ratelimit check" []: [record -> any] {
+    not ($in.reset > (date now))
+
+}

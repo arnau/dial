@@ -74,26 +74,43 @@ export def "search build-query" []: [record -> string] {
 
 # Fetches a list page and provides the result and the URL to the next page.
 #
-# To be used with `generate`
-export def "fetch page" [] {
-    let url = $in
+# To be used with `generate`. Most likely you want to use `fetch all`
+def "fetch page" [] {
+    let input = $in
 
-    if ($url | is-not-empty) {
-        let res = $url | fetch        
-
+    if (($input.url | is-not-empty) and ($input.allowance > 0)) {
+        let res = $input.url | fetch        
 
         if ($res.status != 200) {
             fail $"The request to GitHub failed with error ($res.status)"
         }
 
-        {out: $res.body.items, next: ($res | http next)}
+        let out = {
+            status: $res.status
+            ratelimit: ($res | http ratelimit)
+            next_url: ($res | http next)
+            data: $res.body.items
+        }
+
+        {out: $out, next: {url: $out.next_url, allowance: $out.ratelimit.remaining}}
     }
+}
+
+# Fetches all pages from a starting URL.
+# The result is flattened into a single streamed table.
+export def "fetch all" [] {
+    let url = $in
+    let input = {
+        # TODO: consider checking against https://docs.github.com/en/rest/rate-limit/rate-limit?apiVersion=2022-11-28 to fetch the actual allowance.
+        allowance: 1
+        url: $url
+    }
+
+    generate {fetch page} $input
 }
 
 
 # Search issues and pull requests.
-#
-# The paginated result is flattened into a single streamed table.
 #
 # See: https://docs.github.com/en/rest/search/search?apiVersion=2022-11-28#search-issues-and-pull-requests
 export def "search" [
@@ -109,11 +126,15 @@ export def "search" [
         page: $page
     }
      
-    generate {fetch page} (url join -q $query $"search/issues")
-    | flatten
+    url join -q $query $"search/issues"
+    | fetch all
 }
 
 # Retrieves the list of merged Pull Requests since the given date for the given repositories.
+#
+# ```nu
+# GITHUB_TOKEN=$env.GITHUB_TOKEN_OP dial github pr list merged -s 2024-08-01 nushell/nushell nushell/nu_scripts
+# ```
 export def "pr list merged" [
     --since (-s): datetime # Date from when PRs were merged. Defaults to today.
     --direction: string@"completer pr_direction" = desc
@@ -131,4 +152,26 @@ export def "pr list merged" [
     }
 
     search --direction $direction --per-page $per_page --page $page $query
+}
+
+# NOTE: merged PRs have created_at and closed_at. Gives the full timespan.
+# For a complete timeline, use timeline_url instead. Provides a list of events
+#
+# TODO: Consider usin $in for full URL.
+export def "pr timeline" [repo: string, number: int] {
+    url join $"repos/($repo)/issues/($number)/timeline"
+    | fetch
+
+    # $timeline | get body | insert stamp {|row|
+    #     match $row.event {
+    #         committed => $row.author.date
+    #         reviewed => $row.submitted_at
+    #         _ => $row.created_at
+    #     }
+    # } | select event stamp sha?
+}
+
+# Expects a fully qualified timeline URL.
+export def "pr timeline-url" [] {
+    $in | fetch all
 }
