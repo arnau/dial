@@ -36,8 +36,8 @@ export def "url join" [endpoint: string --query (-q): record] {
 }
 
 
-export def "octocat" [] {
-    url join "octocat"
+export def "rate-limit" [] {
+    url join "rate_limit"
     | fetch 
 }
 
@@ -52,6 +52,23 @@ module completer {
 
     export def pr_direction [] {
         [asc desc]
+    }
+
+    export def ratelimit_resources [] {
+        [
+            core
+            search
+            graphql
+            integration_manifest
+            source_import
+            code_scanning_upload
+            actions_runner_regitration
+            scim
+            dependency_snapshots
+            audit_log
+            audit_log_streaming
+            code_search
+        ]
     }
 }
 use completer
@@ -97,12 +114,13 @@ def "fetch page" [] {
 }
 
 # Fetches all pages from a starting URL.
-# The result is flattened into a single streamed table.
-export def "fetch all" [] {
+export def "fetch all" [
+    resource: string@"completer ratelimit_resources" # A GitHub rate limit resource type.
+]: [string -> table] {
     let url = $in
+    let allowance = (rate-limit | get body.resources | get $resource | get remaining)
     let input = {
-        # TODO: consider checking against https://docs.github.com/en/rest/rate-limit/rate-limit?apiVersion=2022-11-28 to fetch the actual allowance.
-        allowance: 1
+        allowance: $allowance
         url: $url
     }
 
@@ -127,7 +145,7 @@ export def "search" [
     }
      
     url join -q $query $"search/issues"
-    | fetch all
+    | fetch all "search"
 }
 
 # Retrieves the list of merged Pull Requests since the given date for the given repositories.
@@ -173,5 +191,5 @@ export def "pr timeline" [repo: string, number: int] {
 
 # Expects a fully qualified timeline URL.
 export def "pr timeline-url" [] {
-    $in | fetch all
+    $in | fetch all "core"
 }
