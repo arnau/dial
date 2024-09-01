@@ -1,8 +1,10 @@
 # Metric monitoring
 
-# export use ./token.nu
-# export use ./http.nu
-export use ./github.nu
+# export use token.nu
+# export use http.nu
+export use config.nu *
+export use github.nu
+export use source.nu
 
 
 # REVIEW: Rename/alias modules
@@ -11,3 +13,4 @@ export use ./github.nu
 # }
 
 # export use gh
+

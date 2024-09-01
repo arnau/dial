@@ -105,8 +105,9 @@ def "fetch page" [] {
         let out = {
             status: $res.status
             ratelimit: ($res | http ratelimit)
+            url: $input.url
             next_url: ($res | http next)
-            data: $res.body.items
+            data: $res.body
         }
 
         {out: $out, next: {url: $out.next_url, allowance: $out.ratelimit.remaining}}
@@ -178,7 +179,7 @@ export def "pr list merged" [
 # TODO: Consider usin $in for full URL.
 export def "pr timeline" [repo: string, number: int] {
     url join $"repos/($repo)/issues/($number)/timeline"
-    | fetch
+    | fetch all "core"
 
     # $timeline | get body | insert stamp {|row|
     #     match $row.event {
