@@ -48,12 +48,8 @@ export def open [
     let parquet_files = $files | where { path parse | get extension | $in == "parquet" }
     let other_files = $files | where { path parse | get extension | $in != "parquet" }
 
-    let res = open-file ...$other_files
-
-    $res
-    | append (
-        $parquet_files
+    interleave { open-file ...$other_files } { $parquet_files
         | par-each {|file| duckdb open $file }
         | flatten
-     )
+    }
 }
