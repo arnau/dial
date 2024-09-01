@@ -1,0 +1,35 @@
+{
+    teams: [
+        {
+            id: "c78f4efe-17e1-47f7-8b17-33081d37bba9"
+            name: "red_onions"
+            members: [
+                {
+                    email: "a@redonions.net"
+                    github_handle: a-onion
+                    active: false
+                    start_date: 2024-01-01
+                    end_date: 2024-03-24
+                }
+                {
+                    email: "b@redonions.net"
+                    github_handle: b-onion
+                    active: true
+                    start_date: 2024-08-01
+                }
+            ]
+            repos: [
+                {
+                    name: "nushell/nushell"
+                    active: true
+                    start_date: 2024-01-01
+                }
+                {
+                    name: "nushell/nu_scripts"
+                    active: true
+                    start_date: 2024-05-01
+                }
+            ]
+        }
+    ]
+}
