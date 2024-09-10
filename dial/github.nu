@@ -149,6 +149,20 @@ export def "search" [
     | fetch all "search"
 }
 
+export def "pr list normalise" [] {
+    $in
+    | flatten
+    | select number repository_url url timeline_url title created_at updated_at closed_at user.login
+    | rename --column {"user.login": "creator"}
+    | insert repo {|row|
+          $row.repository_url
+          | parse --regex '(?<repo>[^\/]+\/[^\/]+)$'
+          | get repo.0
+      }
+}
+
+
+
 # Retrieves the list of merged Pull Requests since the given date for the given repositories.
 #
 # ```nu
@@ -159,16 +173,15 @@ export def "pr list merged" [
     --direction: string@"completer pr_direction" = desc
     --per-page: int = 100
     --page: int = 1
-    ...repos
+    query: record
 ] {
     let since = if ($since | is-empty) { date now } else { $since }
     let since_stamp = ($since | format date "%Y-%m-%d")
     let query = {
-        repo: $repos
         type: pr
         is: merged
         merged: $">=($since_stamp)"
-    }
+    } | merge $query
 
     search --direction $direction --per-page $per_page --page $page $query
 }

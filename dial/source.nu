@@ -20,27 +20,58 @@ const allowlist_events = [
     unassigned
 ]
 
+# Fetches and stores data about the GitHub Pull Requests for the team organisations 
+# merged since the given date and stores it in the merged bucket.
+export def "org merged" [since: datetime, team: string@"team list names"] {
+    let orgs = team orgs $team
+    let start_date = ($since | format date "%F")
+    let end_date = (date now | format date "%F")
+    let filename = $"data/merged/($team).($orgs | str join ".").($start_date).($end_date).parquet"
+
+    let res = github pr list merged -s $since {org: $orgs}
+
+    # Soft abort if at least one request failed.
+    # TODO: review fail path
+    if ($res | where status != 200 | is-not-empty) {
+        return $res
+    }
+
+    $res
+    | get data.items
+    | github pr list normalise
+    | tee { if ($in | is-not-empty) { $in | duckdb save -f $filename } }
+    | do {
+          let items = $in
+
+          {
+              filename: $filename
+              count: ($items | length)
+              start_date: $start_date
+              end_date: $end_date
+          }
+      }
+}
 
 
-
-# Fetches and stores data about the GitHub Pull Requests merged since the given date
-# and stores it in the merged bucket.
-export def "merged" [since: datetime, team: string@"team list"] {
+# Fetches and stores data about the GitHub Pull Requests for the team repos merged 
+# since the given date and stores it in the merged bucket.
+export def "merged" [since: datetime, team: string@"team list names"] {
     let repos = team repos $team | get name
     let start_date = ($since | format date "%F")
     let end_date = (date now | format date "%F")
     let filename = $"data/merged/($team).($start_date).($end_date).parquet"
 
-    github pr list merged -s $since ...$repos
+    let res = github pr list merged -s $since {repo: $repos}
+
+    # Soft abort if at least one request failed.
+    # TODO: review fail path
+    if ($res | where status != 200 | is-not-empty) {
+        return $res
+    }
+    
+    $res
     | get data.items
-    | flatten
-    | select number repository_url url timeline_url title created_at updated_at closed_at user.login
-    | rename --column {"user.login": "creator"}
-    | insert repo {|row|
-          $row.repository_url
-          | parse --regex '(?<repo>[^\/]+\/[^\/]+)$'
-          | get repo.0
-      }
+    | github pr list normalise
     | tee { if ($in | is-not-empty) { $in | duckdb save -f $filename } }
     | do {
           let items = $in

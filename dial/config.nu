@@ -6,15 +6,24 @@ export def main [] {
 }
 
 export def "team list" [] {
-    main | get teams | get name
+    main | get teams
+}
+
+export def "team list names" [] {
+    team list | get name
+}
+
+# The list of organisations for the given team.
+export def "team orgs" [team: string@"team list names"] {
+    team list | where name == $team | get 0.orgs
 }
 
 # The list of repos for the given team.
-export def "team repos" [team: string@"team list"] {
-    main | get teams | where name == $team | get 0.repos
+export def "team repos" [team: string@"team list names"] {
+    team list | where name == $team | get 0.repos
 }
 
 # The list of members for the given team.
-export def "team members" [team: string@"team list"] {
-    main | get teams | where name == $team | get 0.members
+export def "team members" [team: string@"team list names"] {
+    team list | where name == $team | get 0.members
 }
