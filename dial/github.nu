@@ -22,7 +22,7 @@ export def "fetch" [] {
         Authorization: $"Bearer (token read $token)"
     }
 
-    http get -f --headers $headers $url 
+    http get --full --allow-errors --headers $headers $url 
 }
 
 # Composes a GitHub API URL.
@@ -98,6 +98,7 @@ def "fetch page" [] {
     if (($input.url | is-not-empty) and ($input.allowance > 0)) {
         let res = $input.url | fetch        
 
+        # TODO: Return the response body as a page record instead of failing.
         if ($res.status != 200) {
             fail $"The request to GitHub failed with error ($res.status)"
         }
