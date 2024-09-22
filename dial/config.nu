@@ -27,3 +27,8 @@ export def "team repos" [team: string@"team list names"] {
 export def "team members" [team: string@"team list names"] {
     team list | where name == $team | get 0.members
 }
+
+# The list of Jira projects for the given team.
+export def "team jira_projects" [team: string@"team list names"] {
+    team list | where name == $team | get 0.jira_projects
+}
