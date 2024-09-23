@@ -12,6 +12,12 @@ use http.nu
 use config.nu *
 
 
+def base-url [] {
+    let baseurl = try-env JIRA_BASEURL
+
+    $"($baseurl)/rest/api/3/"
+}
+
 # Composes a token for the Jira REST API.
 def credentials [] {
     let username = try-env JIRA_USERNAME
@@ -21,19 +27,9 @@ def credentials [] {
     | encode new-base64
 }
 
-# Composes a Jira API endpoint.
-def build-endpoint [path: string, query: record]: nothing -> string {
-    let baseurl = try-env JIRA_BASEURL
-    let api_baseurl = $"($baseurl)/rest/api/3/"
-
-    [
-        ($api_baseurl | path join $path)
-        ($query | url build-query)
-    ]
-    | str join '?'
-}
-
-export def "fetch" [url: string] {
+# Requests someting from the Jira API.
+export def "fetch" []: [string -> table] {
+    let url = $in
     let headers = {
         Accept: "application/json"
         Authorization: $"Basic (credentials)"
@@ -41,7 +37,6 @@ export def "fetch" [url: string] {
 
     http get --full --allow-errors --headers $headers $url 
 }
-
 
 export def "jql team" [start_date: string, end_date: string, members: list<string>] {
     let members = $members | each { $"'($in)'"} | str join ", "
@@ -86,9 +81,10 @@ export def "list fetch" [
         maxResults: $max_results
         fields: ($fields | str join ',')
     }
-    let endpoint = build-endpoint "search" $query
 
-    fetch $endpoint
+    base-url
+    | http url join "search" -q $query
+    | fetch
 }
 
 
@@ -129,9 +125,10 @@ export def "list flatten" []: table -> table {
 # Gets the changelog for the given issue ID from Jira.
 export def "changelog fetch" [key: string, from: int = 0]: nothing -> table {
     let query = {startAt: $from}
-    let endpoint = build-endpoint $"issue/($key)" $query
 
-    fetch $endpoint
+    base url
+    | http url join $"issue/($key)" -q $query
+    | fetch
     | insert key $key
 }
 

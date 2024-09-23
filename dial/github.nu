@@ -3,8 +3,10 @@ use ./error.nu *
 use ./token.nu
 use ./http.nu
 
-const BASE_URL = "https://api.github.com"
 
+def base-url [] {
+    "https://api.github.com"
+}
 
 # Composes a token for the GitHub API.
 def credentials [] {
@@ -13,13 +15,13 @@ def credentials [] {
     token read $token
 }
 
-# Requests something from the GitHub API
+# Requests something from the GitHub API.
 #
 # Response notes:
 #
 # x-ratelimit-reset * 1_000_000_000 | into datetime
 # x-ratelimit-remaining
-export def "fetch" [] {
+export def "fetch" []: [string -> table] {
     let url = $in
     let token = credentials
     let headers = {
@@ -31,19 +33,9 @@ export def "fetch" [] {
     http get --full --allow-errors --headers $headers $url 
 }
 
-# Composes a GitHub API URL.
-export def "url join" [endpoint: string --query (-q): record] {
-    [
-        $"($BASE_URL)/($endpoint)"
-        ($query | url build-query)
-    ]
-    | compact --empty
-    | str join "?"
-}
-
-
 export def "rate-limit" [] {
-    url join "rate_limit"
+    base-url
+    | http url join "rate_limit"
     | fetch 
 }
 
@@ -152,7 +144,8 @@ export def "search" [
         page: $page
     }
      
-    url join -q $query $"search/issues"
+    base-url
+    | http url join -q $query $"search/issues"
     | fetch all "search"
 }
 
@@ -198,7 +191,8 @@ export def "pr list merged" [
 #
 # TODO: Consider usin $in for full URL.
 export def "pr timeline" [repo: string, number: int] {
-    url join $"repos/($repo)/issues/($number)/timeline"
+    base-url
+    | http url join $"repos/($repo)/issues/($number)/timeline"
     | fetch all "core"
 
     # $timeline | get body | insert stamp {|row|

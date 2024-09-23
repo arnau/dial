@@ -1,5 +1,16 @@
 # HTTP helpers, extending std http
 
+# Composes a URL.
+export def "url join" [path: string --query (-q): record] {
+    let base_url = $in
+
+    [
+        $"($base_url)/($path)"
+        ($query | url build-query)
+    ]
+    | compact --empty
+    | str join "?"
+}
 
 # Expects an input from a raw Link http header.
 #
