@@ -14,12 +14,8 @@ use config.nu *
 
 # Composes a token for the Jira REST API.
 def credentials [] {
-    let username = try { $env.JIRA_USERNAME } catch {
-        fail "Expected an environment variable named `JIRA_USERNAME`"
-    }
-    let token = try { $env.JIRA_TOKEN } catch {
-        fail "Expected an environment variable named `JIRA_TOKEN`"
-    }
+    let username = try-env JIRA_USERNAME
+    let token = try-env JIRA_TOKEN
 
     $"($username):(token read $token)"
     | encode new-base64
@@ -27,9 +23,7 @@ def credentials [] {
 
 # Composes a Jira API endpoint.
 def build-endpoint [path: string, query: record]: nothing -> string {
-    let baseurl = try { $env.JIRA_BASEURL } catch {
-        fail "Expected an environment variable named `JIRA_BASEURL`"
-    }
+    let baseurl = try-env JIRA_BASEURL
     let api_baseurl = $"($baseurl)/rest/api/3/"
 
     [

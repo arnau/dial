@@ -5,6 +5,14 @@ use ./http.nu
 
 const BASE_URL = "https://api.github.com"
 
+
+# Composes a token for the GitHub API.
+def credentials [] {
+    let token = try-env GITHUB_TOKEN
+
+    token read $token
+}
+
 # Requests something from the GitHub API
 #
 # Response notes:
@@ -13,13 +21,11 @@ const BASE_URL = "https://api.github.com"
 # x-ratelimit-remaining
 export def "fetch" [] {
     let url = $in
-    let token = try { $env.GITHUB_TOKEN } catch {
-        fail "Expected an environment variable named `GITHUB_TOKEN`"
-    }
+    let token = credentials
     let headers = {
         Accept: "application/vnd.github+json"
         X-GitHub-Api-Version: "2022-11-28"
-        Authorization: $"Bearer (token read $token)"
+        Authorization: $"Bearer ($token)"
     }
 
     http get --full --allow-errors --headers $headers $url 
