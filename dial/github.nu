@@ -1,4 +1,7 @@
 # Interactions with GitHub
+
+
+use ./completer.nu
 use ./error.nu *
 use ./token.nu
 use ./http.nu
@@ -38,39 +41,6 @@ export def "rate-limit" [] {
     | http url join "rate_limit"
     | fetch 
 }
-
-module completer {
-    export def pr_statuses [] {
-        [open closed all]
-    }
-
-    export def pr_sort [] {
-        [created updated popularity long-running]
-    }
-
-    export def pr_direction [] {
-        [asc desc]
-    }
-
-    export def ratelimit_resources [] {
-        [
-            core
-            search
-            graphql
-            integration_manifest
-            source_import
-            code_scanning_upload
-            actions_runner_regitration
-            scim
-            dependency_snapshots
-            audit_log
-            audit_log_streaming
-            code_search
-        ]
-    }
-}
-use completer
-
 
 # Converts record into search query string.
 # Similar to `url build-query` but for search queries in GitHub.
@@ -115,7 +85,7 @@ def "fetch page" [] {
 
 # Fetches all pages from a starting URL.
 export def "fetch all" [
-    resource: string@"completer ratelimit_resources" # A GitHub rate limit resource type.
+    resource: string@"completer gh_ratelimit_resources" # A GitHub rate limit resource type.
 ]: [string -> table] {
     let url = $in
     let allowance = (rate-limit | get body.resources | get $resource | get remaining)
