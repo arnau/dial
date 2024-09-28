@@ -126,10 +126,10 @@ export def "list flatten" []: table -> table {
 export def "changelog fetch" [key: string, from: int = 0]: nothing -> table {
     let query = {startAt: $from}
 
-    base url
-    | http url join $"issue/($key)" -q $query
+    base-url
+    | http url join $"issue/($key)/changelog" -q $query
     | fetch
-    | insert key $key
+    | insert body.key $key
 }
 
 # Flattens and slims down the changelog data for the given raw changelog.
