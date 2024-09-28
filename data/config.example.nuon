@@ -3,6 +3,7 @@
         {
             id: "c78f4efe-17e1-47f7-8b17-33081d37bba9"
             name: "red_onions"
+            jira_projects: [Dial]
             orgs: [nushell]
             members: [
                 {
