@@ -27,6 +27,7 @@ def credentials [] {
     | encode new-base64
 }
 
+
 # Requests someting from the Jira API.
 export def "fetch" []: [string -> table] {
     let url = $in
@@ -38,7 +39,109 @@ export def "fetch" []: [string -> table] {
     http get --full --allow-errors --headers $headers $url 
 }
 
-export def "jql team" [start_date: string, end_date: string, members: list<string>] {
+# Fetches a list page and provides the result and the URL to the next page.
+#
+# To be used with `generate`. Most likely you want to use `fetch all`
+def "fetch page" [] {
+    let input = $in
+    let url = $input.url?
+
+    if ($url | is-not-empty) {
+        let res = $url | fetch
+
+        if $res.status != 200 {
+            return {
+                out: {status: $res.status url: $url eror: $res.body}
+                next: null
+            }
+        }
+
+        let out = {
+            status: $res.status
+            url: $url
+            next_url: ($res.body | get nextPage?)            
+            data: $res.body.values
+        }
+
+        {out: $out, next: {url: $out.next_url}}
+    }
+}
+
+# Fetches all records of a paginated resource.
+#
+# See also `search all` for JQL paginated queries.
+export def "fetch all" [] {
+    let url = $in
+    let input = {
+        url: $url
+    }
+
+    generate {fetch page} $input
+}
+
+# Fetches a list page and provides the result and the URL to the next page.
+#
+# To be used with `generate`. Most likely you want to use `search all`
+def "search page" [] {
+    let input = $in
+    let url = $input.url?
+    let query = $input.query?
+    let count = $input.count?
+
+    if ($url | is-not-empty) {
+        let res = $url | fetch
+
+        if $res.status != 200 {
+            return {
+                out: {status: $res.status url: $url eror: $res.body}
+                next: null
+            }
+        }
+
+        let data = $res.body.issues
+        let next_count = $count + ($data | length)
+        let next_query = $query | merge {
+            startAt: $res.body.startAt
+            maxResults: $res.body.maxResults
+        }
+
+        let next_url = if ($next_count < $res.body.total) {
+            base-url | http url join "search" -q $next_query
+        } else { null }
+
+        let out = {
+            status: $res.status
+            url: $url
+            next_url: $next_url
+            data: $data
+        }
+        print $out
+
+        {
+            out: $out
+            next: {
+                url: $out.next_url
+                count: $next_count
+                query: $next_query
+            }
+        }
+    }
+}
+
+# Fetches all pages result of a JQL search.
+export def "search all" [query: record] {
+    let url = base-url | http url join "search" -q $query
+    let input = {
+        url: $url
+        query: $query
+        count: 0
+    }
+
+    generate {search page} $input
+}
+
+# Generates a JQL query to search for all closed (done) tickets for the given date range and list of members.
+export def "jql closed-tickets" [start_date: string, end_date: string, members: list<string>] {
     let members = $members | each { $"'($in)'"} | str join ", "
 
     [
@@ -52,19 +155,25 @@ export def "jql team" [start_date: string, end_date: string, members: list<strin
 }
 
 
-# Fetches the list of jira tickets done for the given members and timeframe
-export def "list fetch" [
-    start_date: string
-    end_date: string
-    members: list<string>
-    from: int = 0
-    max_results: int = 100
+# Fetches the list of jira tickets done for the given date range and email list.
+#
+# ```nu
+# jira tickets fetch 2024-08-01 2024-08-31 (dial team members red-onions | get email)
+# ```
+export def "ticket fetch" [
+    start_date: datetime
+    end_date: datetime
+    emails: list<string>
+    --from: int = 0
+    --max_results: int = 100
 ]: nothing -> table {
-    let jql = (jql team $start_date $end_date $members)
+    let start_date = ($start_date | format date "%F")
+    # WARN: Adding 1 day to the end date to account for Jira not returning data from the upper date even when <= is used.
+    let end_date = seq date --begin-date ($end_date | format date "%F") --days 1 | last
+    let jql = (jql closed-tickets $start_date $end_date $emails)
     let fields = [
         assignee
         created
-        creator
         issuetype
         parent
         priority
@@ -82,19 +191,21 @@ export def "list fetch" [
         fields: ($fields | str join ',')
     }
 
-    base-url
-    | http url join "search" -q $query
-    | fetch
+    search all $query
 }
 
-
+# Translates a Jira search response into the dial ticket data model.
+#
 # ```nu
-# mark jira list fetch "Customer Data" "2024-08-01" "2024-08-31"
-# | mark jira list flatten
+# jira ticket fetch 2024-08-01 2024-08-31 (dial team members red-onions | get email)
+# | jira tickets flatten
 # ```
-export def "list flatten" []: table -> table {
-    $in
-    | get issues
+export def "ticket flatten" []: table -> table {
+    let data = $in
+
+    if ($data | is-empty) { return }
+
+    $data
     | reject expand self
     | update fields { transpose field value }
     | flatten --all
@@ -120,32 +231,32 @@ export def "list flatten" []: table -> table {
       }
     | rename key
     | flatten --all
+    | rename --column {
+          issuetype: type
+          created: creation_date
+          resolutiondate: resolution_date
+          updated: updation_date
+      }
 }
 
 # Gets the changelog for the given issue ID from Jira.
-export def "changelog fetch" [key: string, from: int = 0]: nothing -> table {
-    let query = {startAt: $from}
+export def "changelog fetch" [key: string, from: int = 0, max_results: int = 100]: nothing -> table {
+    let query = {startAt: $from, maxResults: $max_results}
 
     base-url
     | http url join $"issue/($key)/changelog" -q $query
-    | fetch
-    | insert body.key $key
+    | fetch all
+    | insert data.key $key
 }
 
 # Flattens and slims down the changelog data for the given raw changelog.
 export def "changelog flatten" []: table -> table {
     $in
-    | select key values
-    | flatten --all
+    | update author { get emailAddress }
     | flatten --all
     | where field == "status"
-    | rename --column {emailAddress: email, created: timestamp}
-
-    # TODO
-    # | insert from_status { $in.from | map_status }
-    # | insert to_status { $in.to | map_status }
-    # | select key id from_status to_status emailAddress created
-    
+    | reject fieldId fieldtype
+    | rename --column {created: timestamp} 
 }
 
 

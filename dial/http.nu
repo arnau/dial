@@ -5,7 +5,7 @@ export def "url join" [path: string --query (-q): record] {
     let base_url = $in
 
     [
-        $"($base_url)/($path)"
+        ([$base_url $path] | path join)
         ($query | url build-query)
     ]
     | compact --empty

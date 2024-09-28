@@ -39,7 +39,7 @@ export def "fetch" []: [string -> table] {
 export def "rate-limit" [] {
     base-url
     | http url join "rate_limit"
-    | fetch 
+    | fetch
 }
 
 # Converts record into search query string.

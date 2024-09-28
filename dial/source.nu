@@ -23,7 +23,7 @@ const allowlist_events = [
 
 # Fetches merged GitHub Pull Request for the team organisations for the given date
 # range. The result is persisted in `changeset`.
-export def "changesets" [start_date: datetime, end_date: datetime, team: string@"team list names"] {
+export def "changeset fetch" [start_date: datetime, end_date: datetime, team: string@"team list names"] {
     let orgs = team orgs $team
     let start_date = ($start_date | format date "%F")
     let end_date = ($start_date | format date "%F")
@@ -55,7 +55,7 @@ export def "changesets" [start_date: datetime, end_date: datetime, team: string@
 
 # Fetches the timelines for any changeset stored for the given date range.
 # The result is persisted in `changeset_timeline`.
-export def "timelines" [start_date: datetime, end_date: datetime] {
+export def "changeset timeline fetch" [start_date: datetime, end_date: datetime] {
     duckdb open data/changeset/*.parquet
     | update closed_at { into datetime }
     | where closed_at >= $start_date
@@ -94,7 +94,7 @@ export def "timelines" [start_date: datetime, end_date: datetime] {
             $groups
             | insert repo {|row| $row.group | str replace "/" "+" }
             | each {|row|
-                $row.items | duckdb save -f $"data/timeline/($row.repo).($start_date | format date "%F").($row.max | format date "%F").parquet"
+                $row.items | duckdb save -f $"data/changeset_timeline/($row.repo).($start_date | format date "%F").($row.max | format date "%F").parquet"
               }
         }
       }
@@ -104,27 +104,21 @@ export def "timelines" [start_date: datetime, end_date: datetime] {
 # Fetch Jira tickets for the given date range and team members. The result is persisted in `ticket`.
 #
 # ```nu
-# dial tickets 2024-09-23 2024-09-27 red-onions
+# dial ticket fetch 2024-09-23 2024-09-27 red-onions
 # ```
-export def tickets [start_date: datetime, end_date: datetime, team: string@"team list names"] {
+export def "ticket fetch" [start_date: datetime, end_date: datetime, team: string@"team list names"] {
     let emails = team members $team | get email
-    let start_date = ($start_date | format date "%F")
-    # Adding 1 day to the end date to account for Jira not returning data from the upper date even when <= is used.
-    let end_date = seq date --begin-date ($end_date | format date "%F") --days 1 | last
-    let filename = $"data/tickets/($team).($start_date).($end_date).parquet"
+    let start_date_s = $start_date | format date "%F"
+    let end_date_s = $end_date | format date "%F"
+    let filename = $"data/ticket/($team).($start_date_s).($end_date_s).parquet"
 
-    let res = jira list fetch $start_date $end_date $emails
-
-    # Soft abort if at least one request failed.
-    # TODO: review fail path
-    # TODO: Fix when pagination is added
-    if ([$res] | where status != 200 | is-not-empty) {
-        return $res
-    }
+    let res = jira ticket fetch $start_date $end_date $emails
 
     $res
-    | get body
-    | jira list flatten
+    | where status == 200
+    | get data?
+    | flatten
+    | jira ticket flatten
     | tee { if ($in | is-not-empty) { $in | duckdb save -f $filename } }
     | do {
           let items = $in
@@ -134,6 +128,27 @@ export def tickets [start_date: datetime, end_date: datetime, team: string@"team
               count: ($items | length)
               start_date: $start_date
               end_date: $end_date
+              errors: ($res | where status != 200)
+          }
+      }
+}
+
+
+export def "ticket timeline fetch" [start_date: datetime, end_date: datetime] {
+    duckdb open data/ticket/*.parquet
+    | update resolution_date { into datetime }
+    | where resolution_date >= $start_date and resolution_date <= $end_date
+    | par-each {|row|
+          let res = jira changelog fetch $row.key
+
+          if ($res | where status != 200 | is-empty) {
+              $res
+              | get data?
+              | flatten
+              | jira changelog flatten
+              | duckdb save -f $"data/ticket_timeline/($row.key).parquet"
+          } else {
+              fail $"Failed to fetch ($row.key)"
           }
       }
 }
