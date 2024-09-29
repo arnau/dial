@@ -3,6 +3,7 @@ use config.nu *
 use github.nu
 use jira.nu
 use duckdb.nu
+use storage.nu
 
 const allowlist_events = [
     assigned        
@@ -26,8 +27,7 @@ const allowlist_events = [
 export def "changeset fetch" [start_date: datetime, end_date: datetime, team: string@"team list names"] {
     let orgs = team orgs $team
     let start_date = ($start_date | format date "%F")
-    let end_date = ($start_date | format date "%F")
-    let filename = $"data/changeset/($orgs | str join ".").($start_date).($end_date).parquet"
+    let end_date = ($end_date | format date "%F")
 
     let res = github pr list merged -s $start_date {org: $orgs}
 
@@ -40,12 +40,14 @@ export def "changeset fetch" [start_date: datetime, end_date: datetime, team: st
     $res
     | get data.items
     | github pr list normalise
-    | tee { if ($in | is-not-empty) { $in | duckdb save -f $filename } }
+    | tee {
+          if ($in | is-not-empty) { $in | storage save changeset }
+      }
     | do {
           let items = $in
 
           {
-              filename: $filename
+              table: changeset
               count: ($items | length)
               start_date: $start_date
               end_date: $end_date
@@ -56,10 +58,10 @@ export def "changeset fetch" [start_date: datetime, end_date: datetime, team: st
 # Fetches the timelines for any changeset stored for the given date range.
 # The result is persisted in `changeset_timeline`.
 export def "changeset timeline fetch" [start_date: datetime, end_date: datetime] {
-    duckdb open data/changeset/*.parquet
-    | update resolution_date { into datetime }
-    | where resolution_date >= $start_date
-    | where resolution_date <= $end_date
+    let start_date = $start_date | format date "%F"
+    let end_date = $end_date | format date "%F"
+
+    storage query $"select * from changeset where resolution_date >= date '($start_date)' and resolution_date <= date '($end_date)'"
     | par-each {|row|
           $row.timeline_url
           | github pr timeline-url
@@ -68,6 +70,7 @@ export def "changeset timeline fetch" [start_date: datetime, end_date: datetime]
           | reject id?
           | insert changeset_id $row.id
           | insert repository $row.repository
+          | upsert source github
       }
     | flatten
     | collect
@@ -87,18 +90,17 @@ export def "changeset timeline fetch" [start_date: datetime, end_date: datetime]
           }
       }
     | rename --column {node_id: id}
-    | select id changeset_id repository timestamp event actor url?
+    | select id changeset_id repository timestamp event actor url? source
+    | tee { if ($in | is-not-empty) { $in | storage save changeset_event } }
     | do {
-        if ($in | is-not-empty) {
-            let groups = $in | group-by --to-table repository
-            | insert max {|row| $row.items.timestamp | math max }
+          let items = $in
 
-            $groups
-            | insert repo {|row| $row.group | str replace "/" "+" }
-            | each {|row|
-                $row.items | duckdb save -f $"data/changeset_timeline/($row.repo).($start_date | format date "%F").($row.max | format date "%F").parquet"
-              }
-        }
+          {
+              table: changeset_event
+              count: ($items | length)
+              start_date: $start_date
+              end_date: $end_date
+          }
       }
 }
 
@@ -110,9 +112,6 @@ export def "changeset timeline fetch" [start_date: datetime, end_date: datetime]
 # ```
 export def "ticket fetch" [start_date: datetime, end_date: datetime, team: string@"team list names"] {
     let emails = team members $team | get email
-    let start_date_s = $start_date | format date "%F"
-    let end_date_s = $end_date | format date "%F"
-    let filename = $"data/ticket/($team).($start_date_s).($end_date_s).parquet"
 
     let res = jira ticket fetch $start_date $end_date $emails
 
@@ -121,12 +120,12 @@ export def "ticket fetch" [start_date: datetime, end_date: datetime, team: strin
     | get data?
     | flatten
     | jira ticket flatten
-    | tee { if ($in | is-not-empty) { $in | duckdb save -f $filename } }
+    | tee { if ($in | is-not-empty) { $in | storage save ticket } }
     | do {
           let items = $in
 
           {
-              filename: $filename
+              table: ticket
               count: ($items | length)
               start_date: $start_date
               end_date: $end_date
@@ -137,9 +136,10 @@ export def "ticket fetch" [start_date: datetime, end_date: datetime, team: strin
 
 
 export def "ticket timeline fetch" [start_date: datetime, end_date: datetime] {
-    duckdb open data/ticket/*.parquet
-    | update resolution_date { into datetime }
-    | where resolution_date >= $start_date and resolution_date <= $end_date
+    let start_date = $start_date | format date "%F"
+    let end_date = $end_date | format date "%F"
+
+    storage query $"select * from ticket where resolution_date >= date '($start_date)' and resolution_date <= date '($end_date)'"
     | par-each {|row|
           let res = jira changelog fetch $row.key
 
@@ -148,9 +148,20 @@ export def "ticket timeline fetch" [start_date: datetime, end_date: datetime] {
               | get data?
               | flatten
               | jira changelog flatten
-              | duckdb save -f $"data/ticket_timeline/($row.key).parquet"
           } else {
               fail $"Failed to fetch ($row.key)"
+          }
+      }
+    | flatten
+    | tee { if ($in | is-not-empty) { $in | storage save ticket_status } }
+    | do {
+          let items = $in
+
+          {
+              table: ticket_status
+              count: ($items | length)
+              start_date: $start_date
+              end_date: $end_date
           }
       }
 }

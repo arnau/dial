@@ -260,10 +260,11 @@ export def "changelog flatten" []: table -> table {
     | flatten --all
     | where field == "status"
     | reject fieldId fieldtype from to field
-    | rename --column {created: timestamp, fromString: start, toString: end, author: actor} 
+    | rename --column {created: timestamp, fromString: start_status, toString: end_status, author: actor} 
     | insert source "jira"
-    | update start { normalise-status }
-    | update end { normalise-status }
+    | update start_status { normalise-status }
+    | update end_status { normalise-status }
+    | select id key source timestamp actor start_status end_status
 }
 
 

@@ -1,3 +1,4 @@
 data/config.nuon
 data/*/*.parquet
 .dial.nu
+data/dial.db

@@ -48,13 +48,13 @@ create table if not exists ticket (
 
 -- Ticket status transition. E.g. change from 'in-progress' to 'done'.
 create table if not exists ticket_status (
-    id          integer not null
-    , key       text not null
-    , source    text not null
-    , timestamp datetime not null
-    , actor     text not null
-    , start     text not null
-    , end       text not null
+    id             integer not null
+    , key          text not null
+    , source       text not null
+    , timestamp    datetime not null
+    , actor        text not null
+    , start_status text not null
+    , end_status   text not null
 
     , primary key (id, key, source)
 );

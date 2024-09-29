@@ -12,18 +12,12 @@
 export def run [
     command: string  # The query to run.
     filename: string = "" # The filename of the DuckDB database to use.
-    --bail # Stop after hitting an error.
 ] {
-    let flags = [
-        {flag: "-bail", value: $bail}
-    ]
-
-    let options = $flags | where value == true | get flag | str join ' '
-
-    ^duckdb $options -jsonlines -c $command  $filename
+    ^duckdb -jsonlines -c $command  $filename
     | lines
     | each { from json }
 }
+
 
 # Opens a file or set of files based on the file extension.
 #
@@ -64,3 +58,16 @@ export def save [
   | to json
   | ^duckdb -c $"copy \(select * from read_json\('/dev/stdin'\)\) to '($filename)' \(format '($format)'\)"
 }
+
+# Attempts to insert the given table into the DuckDB table replacing when the primary key already exists.
+export def upsert [
+    table_name: string # Target DuckDB table
+    filename: string # A valid DuckDB database.
+]: [table -> table] {
+    let from_stdin = "(select * from read_json('/dev/stdin'))"
+
+    $in
+    | to json
+    | ^duckdb -c $"insert or replace into \"($table_name)\" by name ($from_stdin)" $filename
+}
+
