@@ -122,13 +122,20 @@ export def "search" [
 export def "pr list normalise" [] {
     $in
     | flatten
-    | select number repository_url url timeline_url title created_at updated_at closed_at user.login
-    | rename --column {"user.login": "creator"}
-    | insert repo {|row|
+    | insert repository {|row|
           $row.repository_url
           | parse --regex '(?<repo>[^\/]+\/[^\/]+)$'
           | get repo.0
       }
+    | insert creator { get user.login }
+    | rename --column {
+          number: id
+          title: summary
+          created_at: creation_date
+          closed_at: resolution_date
+      }
+    | select id repository summary creator creation_date resolution_date timeline_url
+    | insert source "github"
 }
 
 
@@ -164,14 +171,6 @@ export def "pr timeline" [repo: string, number: int] {
     base-url
     | http url join $"repos/($repo)/issues/($number)/timeline"
     | fetch all "core"
-
-    # $timeline | get body | insert stamp {|row|
-    #     match $row.event {
-    #         committed => $row.author.date
-    #         reviewed => $row.submitted_at
-    #         _ => $row.created_at
-    #     }
-    # } | select event stamp sha?
 }
 
 # Expects a fully qualified timeline URL.

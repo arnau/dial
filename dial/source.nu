@@ -57,16 +57,17 @@ export def "changeset fetch" [start_date: datetime, end_date: datetime, team: st
 # The result is persisted in `changeset_timeline`.
 export def "changeset timeline fetch" [start_date: datetime, end_date: datetime] {
     duckdb open data/changeset/*.parquet
-    | update closed_at { into datetime }
-    | where closed_at >= $start_date
-    | where closed_at <= $end_date
+    | update resolution_date { into datetime }
+    | where resolution_date >= $start_date
+    | where resolution_date <= $end_date
     | par-each {|row|
           $row.timeline_url
           | github pr timeline-url
           | get data
           | flatten
-          | insert number { $row.number }
-          | insert repo { $row.repo }
+          | reject id?
+          | insert changeset_id $row.id
+          | insert repository $row.repository
       }
     | flatten
     | collect
@@ -85,10 +86,11 @@ export def "changeset timeline fetch" [start_date: datetime, end_date: datetime]
               _ => $row.created_at
           }
       }
-    | select number repo timestamp event actor url?
+    | rename --column {node_id: id}
+    | select id changeset_id repository timestamp event actor url?
     | do {
         if ($in | is-not-empty) {
-            let groups = $in | group-by --to-table repo
+            let groups = $in | group-by --to-table repository
             | insert max {|row| $row.items.timestamp | math max }
 
             $groups

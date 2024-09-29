@@ -115,7 +115,6 @@ def "search page" [] {
             next_url: $next_url
             data: $data
         }
-        print $out
 
         {
             out: $out
@@ -177,12 +176,10 @@ export def "ticket fetch" [
         issuetype
         parent
         priority
-        reporter
         resolution
         resolutiondate
         status
         summary
-        updated
     ]
     let query = {
         jql: $jql
@@ -211,12 +208,10 @@ export def "ticket flatten" []: table -> table {
     | flatten --all
     | update value {|row|    
         match $row.field {
-            "creator" => $row.value.emailAddress?,
             "status" => $row.value.name,
             "assignee" => $row.value.emailAddress?,
             "parent" => $row.value.key?,
             "priority" => $row.value.id?,
-            "reporter" => $row.value.emailAddress?,
             "issuetype" => $row.value.name?,
             "resolution" => $row.value.name?,
             _ => $row.value,
@@ -235,8 +230,8 @@ export def "ticket flatten" []: table -> table {
           issuetype: type
           created: creation_date
           resolutiondate: resolution_date
-          updated: updation_date
       }
+    | insert source "jira"
 }
 
 # Gets the changelog for the given issue ID from Jira.
@@ -249,14 +244,26 @@ export def "changelog fetch" [key: string, from: int = 0, max_results: int = 100
     | insert data.key $key
 }
 
+def normalise-status [] {
+    match $in {
+        # "To Do" => "to-do"
+        # "In Progress" => "in-progress"
+        # "Done" => "done"
+        $s => ($s | str kebab-case)
+    }
+}
+
 # Flattens and slims down the changelog data for the given raw changelog.
 export def "changelog flatten" []: table -> table {
     $in
     | update author { get emailAddress }
     | flatten --all
     | where field == "status"
-    | reject fieldId fieldtype
-    | rename --column {created: timestamp} 
+    | reject fieldId fieldtype from to field
+    | rename --column {created: timestamp, fromString: start, toString: end, author: actor} 
+    | insert source "jira"
+    | update start { normalise-status }
+    | update end { normalise-status }
 }
 
 
