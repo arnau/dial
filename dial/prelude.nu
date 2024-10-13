@@ -87,15 +87,12 @@ export def weekdays [start_date: datetime, end_date: datetime] {
         }
     }
 
-    let weekdays = $weekdays_in_full_weeks + $remaining_days - $weekend_days
+    mut weekdays = $weekdays_in_full_weeks + $remaining_days - $weekend_days
 
-    print {
-        start_date: $start_date
-        end_date: $end_date
-        weekdays: $weekdays
-    }
+    # When start and end are within the same weekend maths don't add up.
+    if ($weekdays < 0) { $weekdays = 0 }
 
-    $weekdays
+    $weekdays * 24 | into int | into duration -u hr
 }
 
 
