@@ -1,4 +1,5 @@
 use duckdb.nu
+use error.nu *
 
 alias save-file = save
 alias open-file = open
@@ -37,6 +38,64 @@ export def "into iso-datestamp" []: [datetime -> string] {
 
 export def "into iso-timestamp" []: [datetime -> string] {
     $in | format date "%+"
+}
+
+export def "duration days" []: [duration -> int] {
+    $in
+    | into int
+    | $in / 1_000_000_000
+    | $in / 86_400
+}
+
+export def "date weekday" [] {
+    $in
+    | format date "%u"
+    | into int
+}
+
+# Calculates the number of working days between two datese, excluding weekends.
+export def weekdays [start_date: datetime, end_date: datetime] {
+    if ($end_date < $start_date) { fail "The end date must happen after the start date." }
+
+    let days = (($end_date - $start_date) + 1day) | duration days
+    let full_weeks = $days // 7
+    # number of weekdays in the full weeks
+    let weekdays_in_full_weeks = $full_weeks * 5
+    # number of weekdays in the partial weeks
+    let remaining_days = $days mod 7
+    # number of weekend days in the remaining partial weeks
+    mut weekend_days = 0
+    let start_weekday = $start_date | date weekday
+    mut end_weekday = $end_date | date weekday
+
+    if ($days > ($full_weeks * 7)) {
+        if ($end_weekday < $start_weekday) {
+            $end_weekday += 7
+        }
+
+        if ($start_weekday <= 6) {
+            if ($end_weekday >= 7) {
+                # saturday and sunday exist in the remainder
+                $weekend_days += 2
+            } else if ($end_weekday >= 6) {
+                # saturday exist in the remainder
+                $weekend_days += 1
+            }
+        } else if ($start_weekday <= 7 and $end_weekday >= 7) {
+            # sunday exists in the remainder
+            $weekend_days += 1
+        }
+    }
+
+    let weekdays = $weekdays_in_full_weeks + $remaining_days - $weekend_days
+
+    print {
+        start_date: $start_date
+        end_date: $end_date
+        weekdays: $weekdays
+    }
+
+    $weekdays
 }
 
 
