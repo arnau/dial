@@ -17,17 +17,26 @@ export def "team list names" [] {
 
 # The list of organisations for the given team.
 export def "team orgs" [team: string@"team list names"] {
-    team list | where name == $team | get 0.orgs
+    team list
+    | where name == $team
+    | get 0?.orgs
+    | default []
 }
 
 # The list of repos for the given team.
 export def "team repos" [team: string@"team list names"] {
-    team list | where name == $team | get 0.repos
+    team list
+    | where name == $team
+    | get 0?.repos
+    | default []
 }
 
 # The list of members for the given team.
 export def "team members" [team: string@"team list names"] {
-    team list | where name == $team | get 0.members
+    team list
+    | where name == $team
+    | get 0?.members
+    | default []
 }
 
 # Groups the team members into time windows where these members wher part of the team.
