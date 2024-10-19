@@ -47,11 +47,19 @@ export def "duration days" []: [duration -> int] {
     | $in / 86_400
 }
 
+# Takes a raw number of days and casts it as a duration rounded to hours.
+export def "duration from days" []: [int -> duration, float -> duration] {
+    $in * 24
+    | into int
+    | into duration -u hr
+}
+
 export def "date weekday" [] {
     $in
     | format date "%u"
     | into int
 }
+
 
 # Calculates the number of working days between two datese, excluding weekends.
 export def weekdays [start_date: datetime, end_date: datetime] {
@@ -92,7 +100,7 @@ export def weekdays [start_date: datetime, end_date: datetime] {
     # When start and end are within the same weekend maths don't add up.
     if ($weekdays < 0) { $weekdays = 0 }
 
-    $weekdays * 24 | into int | into duration -u hr
+    $weekdays | duration from days
 }
 
 

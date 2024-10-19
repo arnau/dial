@@ -192,17 +192,13 @@ export def "ticket fetch" [
 }
 
 # Translates a Jira search response into the dial ticket data model.
-#
-# ```nu
-# jira ticket fetch 2024-08-01 2024-08-31 (dial team members red-onions | get email)
-# | jira tickets flatten
-# ```
-export def "ticket flatten" []: table -> table {
+export def "ticket normalise" []: table -> table {
     let data = $in
 
     if ($data | is-empty) { return }
 
     $data
+    | flatten
     | reject expand self
     | update fields { transpose field value }
     | flatten --all
