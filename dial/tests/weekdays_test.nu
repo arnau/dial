@@ -1,5 +1,23 @@
 use std assert
-use ../prelude.nu weekdays
+use ../prelude.nu [weekdays, "date weekday"]
+
+# Naive implementation.
+def naive_weekdays [start_date: datetime, end_date: datetime] {
+    mut current_date = $start_date
+    mut weekdays = 0
+
+    while $current_date <= $end_date {
+        # Monday = 1, Friday = 5
+        if ($current_date | date weekday | $in <= 5) {
+            $weekdays += 1
+        }
+
+        $current_date = ($current_date + 1day)
+    }
+
+    $weekdays * 24 | into int | into duration -u hr
+}
+
 
 #[test]
 def test_bad_input [] {
@@ -44,6 +62,13 @@ def test_partial_with_weekend [] {
 #[test]
 def test_full_month [] {
     let expected = (weekdays 2024-10-01 2024-10-31)
-    let actual = 23day
+    let actual = (naive_weekdays 2024-10-01 2024-10-31)
+    assert equal $actual $expected
+}
+
+#[test]
+def test_full_year [] {
+    let expected = (weekdays 2024-01-01 2024-12-31)
+    let actual = (naive_weekdays 2024-01-01 2024-12-31)
     assert equal $actual $expected
 }
