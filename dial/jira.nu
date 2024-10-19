@@ -24,7 +24,7 @@ def credentials [] {
     let token = try-env JIRA_TOKEN
 
     $"($username):(token read $token)"
-    | encode new-base64
+    | encode base64
 }
 
 
