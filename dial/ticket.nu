@@ -1,6 +1,7 @@
 # Managing data fetched from sources such as GitHub.
 use config.nu *
 use prelude.nu *
+use metrics.nu
 use jira.nu
 use storage.nu
 
@@ -115,7 +116,7 @@ export def "list" [start_date: datetime, end_date: datetime, team: string@"team 
     storage query $query
     | update cells -c [creation_date resolution_date] { into datetime }
     | insert business_cycletime {|row| weekdays $row.creation_date $row.resolution_date }
-    | insert total_cycletime {|row| $row.resolution_date - $row.creation_date }
+    | insert natural_cycletime {|row| $row.resolution_date - $row.creation_date }
 }
 
 
@@ -124,11 +125,11 @@ export def "cycletime" [start_date: datetime, end_date: datetime, team: string@"
     let data = list $start_date $end_date $team | get business_cycletime
 
     {
-        avg: ($data | math avg)
-        stddev: ($data | each { duration days } | math stddev | duration from days)
-        median: ($data | math median)
-        max: ($data | math max)
-        min: ($data | math min)
+        avg: ($data | metrics avg)
+        stddev: ($data | each { duration days } | metrics stddev | duration from days)
+        median: ($data | metrics median)
+        max: ($data | metrics max)
+        min: ($data | metrics min)
         size: ($data | length)
     }
 }
