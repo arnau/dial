@@ -11,6 +11,16 @@ use prelude.nu *
 use metrics.nu
 
 
+# Deployment frequency (DF): How often does your organization deploy code to production?
+#   Sources: GitHub PR, Drone, GitHub Action.
+# Lead time for changes (LTFC): How long does it take to go from code committed to code running in production?
+#   Sources: Jira ticket cycletime, GitHub issue cycletime, GitHub PR cycletime
+# Change failure rate (CFR): What percentage of changes to production result in degraded service and need remediation?
+#   Sources: Pagerduty, incident.io, Jira ticket bug, GitHub PR
+# Time to restore (TTR): How long does it generally take to restore service when a service incident or a defect that impacts users occurs?
+#   Source: Pagerduty, incident.io
+
+
 # Summarises the DORA metrics for the given period and team.
 #
 # NOTE: The number of team members is calculated as a constant for the given period.
