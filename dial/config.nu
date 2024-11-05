@@ -78,3 +78,27 @@ export def "team time-windows" [
 export def "team jira_projects" [team: string@"team list names"] {
     team list | where name == $team | get 0.jira_projects
 }
+
+
+# Prefer `team events members`
+export def "team events member-list" [members: list] {
+    $members
+    | reduce --fold [] {|member, events|
+          let new_events = [
+              {action: add, timestamp: $member.start_date, member: $member.id}
+              (if ($member.end_date? | is-not-empty) {
+                  {action: remove, timestamp: $member.end_date?, member: $member.id}
+              })
+          ] | compact
+
+          $events | append $new_events
+      }
+    | sort-by timestamp action member
+}
+
+# Lists the team member additions and removals.
+export def "team events members" [team: string@"team list names"] {
+    let members = team members $team
+
+    team events member-list $members
+}
