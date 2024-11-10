@@ -34,7 +34,7 @@ const member_list = [
 #[test]
 def test_no_members [] {
     let expected = []
-    let actual = team events member-list []
+    let actual = team event member-list []
     assert equal $expected $actual
 }
 
@@ -50,8 +50,38 @@ def test_member_set [] {
         { action: remove, timestamp: 2024-09-23, member: debra }
     ]
 
-    let actual = team events member-list $member_list
-    print "foo"
+    let actual = team event member-list $member_list
+
     assert equal $expected $actual
 }
 
+#[test]
+def test_event_to_window [] {
+    let events = team event member-list $member_list
+    let expected = [
+        {
+            start_date: 2024-01-01
+            end_date: 2024-01-31
+            members: [alice bob charly]
+        }
+        {
+            start_date: 2024-02-01
+            end_date: 2024-04-10
+            members: [alice bob charly debra]
+        }
+        {
+            start_date: 2024-04-11
+            end_date: 2024-09-22
+            members: [alice bob debra]
+        }
+        {
+            start_date: 2024-09-23
+            end_date: null
+            members: [alice bob]
+        }
+    ]
+
+    let actual = $events | team event to-window
+
+    assert equal $expected $actual
+}
