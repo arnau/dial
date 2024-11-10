@@ -193,12 +193,11 @@ export def "ticket fetch" [
 
 # Translates a Jira search response into the dial ticket data model.
 export def "ticket normalise" []: table -> table {
-    let data = $in
+    let data = $in | flatten
 
-    if ($data | is-empty) { return }
+    if ($data | compact | is-empty) { return [] }
 
     $data
-    | flatten
     | reject expand self
     | update fields { transpose field value }
     | flatten --all

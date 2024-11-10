@@ -134,7 +134,6 @@ export def "list" [start_date: datetime, end_date: datetime, team: string@"team 
 }
 
 
-
 # Computes the changeset cycletime for the given period and team.
 export def "cycletime" [start_date: datetime, end_date: datetime, team: string@"team list names"] {
     let data = list $start_date $end_date $team | get business_cycletime

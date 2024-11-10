@@ -88,8 +88,8 @@ export def "timeline fetch" [start_date: datetime, end_date: datetime] {
       }
 }
 
-export def "list" [start_date: datetime, end_date: datetime, team: string@"team list names"] {
-    let members = team members $team | get email | each { $"'($in)'" }
+export def "list by-members" [start_date: datetime, end_date: datetime, members: list] {
+    let members = $members | get email | each { $"'($in)'" }
     let start_date = $start_date | into iso-timestamp
     let end_date = $end_date | into iso-timestamp
     let query = $"
@@ -119,6 +119,28 @@ export def "list" [start_date: datetime, end_date: datetime, team: string@"team 
     | insert natural_cycletime {|row| $row.resolution_date - $row.creation_date }
 }
 
+
+# Lists tickets for the given time interval split by window.
+export def "list by-window" [start_date: datetime, end_date: datetime, team: string@"team list names"] {
+    let members = team members $team
+    let windows = team event members $team
+        | team event to-window
+        | team window crop $start_date $end_date
+
+    $windows
+    | insert tickets {|window|
+          let members = $members | where id in $window.members
+
+          list by-members $window.start_date $window.end_date $members
+      }
+}
+
+# A flattened list of changesets.
+export def "list" [start_date: datetime, end_date: datetime, team: string@"team list names"] {
+    list by-window $start_date $end_date $team
+    | get tickets
+    | flatten
+}
 
 # Computes the changeset cycletime for the given period and team.
 export def "cycletime" [start_date: datetime, end_date: datetime, team: string@"team list names"] {
