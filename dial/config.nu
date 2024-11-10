@@ -243,3 +243,22 @@ export def "team event to-window" []: [
     $context.windows
     | append $context.current
 }
+
+# Takes a list of windows and crops them within the provided interval.
+export def "team window crop" [start_date: datetime, end_date: datetime] {
+    let windows = $in
+
+    $windows
+    | each {|window|
+        if ($window.start_date > $end_date) { return null }
+
+        let start_date = [$window.start_date $start_date] | math max
+        let end_date = [$window.end_date $end_date] | compact | math min
+
+        {
+            start_date: $start_date
+            end_date: $end_date
+            members: $window.members
+        }
+    }
+}

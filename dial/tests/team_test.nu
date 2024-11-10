@@ -85,3 +85,129 @@ def test_event_to_window [] {
 
     assert equal $expected $actual
 }
+
+#[test]
+def test_window_crop [] {
+    let windows = [
+        {
+            start_date: 2024-01-01
+            end_date: 2024-01-31
+            members: [alice bob charly]
+        }
+        {
+            start_date: 2024-02-01
+            end_date: 2024-04-10
+            members: [alice bob charly debra]
+        }
+        {
+            start_date: 2024-04-11
+            end_date: 2024-09-22
+            members: [alice bob debra]
+        }
+        {
+            start_date: 2024-09-23
+            end_date: null
+            members: [alice bob]
+        }
+    ]
+    let expected = [
+        {
+            start_date: 2024-01-30
+            end_date: 2024-01-31
+            members: [alice bob charly]
+        }
+        {
+            start_date: 2024-02-01
+            end_date: 2024-04-10
+            members: [alice bob charly debra]
+        }
+        {
+            start_date: 2024-04-11
+            end_date: 2024-08-31
+            members: [alice bob debra]
+        }
+    ]
+
+    let actual = $windows | team window crop 2024-01-30 2024-08-31
+
+    assert equal $expected $actual
+}
+
+#[test]
+def test_window_crop_unbound_end [] {
+    let windows = [
+        {
+            start_date: 2024-01-01
+            end_date: 2024-01-31
+            members: [alice bob charly]
+        }
+        {
+            start_date: 2024-02-01
+            end_date: 2024-09-22
+            members: [alice bob debra]
+        }
+        {
+            start_date: 2024-09-23
+            end_date: null
+            members: [alice bob]
+        }
+    ]
+    let expected = [
+        {
+            start_date: 2024-01-30
+            end_date: 2024-01-31
+            members: [alice bob charly]
+        }
+        {
+            start_date: 2024-02-01
+            end_date: 2024-09-22
+            members: [alice bob debra]
+        }
+        {
+            start_date: 2024-09-23
+            end_date: 2024-10-01
+            members: [alice bob]
+        }
+    ]
+
+    let actual = $windows | team window crop 2024-01-30 2024-10-01
+
+    assert equal $expected $actual
+}
+
+#[test]
+def test_window_crop_unbound_start [] {
+    let windows = [
+        {
+            start_date: 2024-01-01
+            end_date: 2024-01-31
+            members: [alice bob charly]
+        }
+        {
+            start_date: 2024-02-01
+            end_date: 2024-09-22
+            members: [alice bob debra]
+        }
+        {
+            start_date: 2024-09-23
+            end_date: null
+            members: [alice bob]
+        }
+    ]
+    let expected = [
+        {
+            start_date: 2024-01-01
+            end_date: 2024-01-31
+            members: [alice bob charly]
+        }
+        {
+            start_date: 2024-02-01
+            end_date: 2024-02-25
+            members: [alice bob debra]
+        }
+    ]
+
+    let actual = $windows | team window crop 2023-01-01 2024-02-25
+
+    assert equal $expected $actual
+}
