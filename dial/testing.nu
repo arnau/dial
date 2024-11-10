@@ -345,8 +345,11 @@ export def run-tests [
         $path
     }
 
+    log info $"module: ($module_search_pattern)"
+    log info $"path: ($path)\n\n"
+
     if not ($module | is-empty) {
-        try { ls ($path | path join $module_search_pattern) | null } catch {
+        try { ls ($path | path join $module_search_pattern | into glob) | null } catch {
             throw-error {
                 msg: "module_not_found"
                 label: $"no such module in ($path)"
